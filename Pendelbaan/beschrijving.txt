@@ -1,0 +1,5 @@
+COM_reg
+bit0  PWM duty cycle flag
+bit1  motor on(true)
+bit2 Startup adjust mode (true)
+bit3 direction (denderen melders)

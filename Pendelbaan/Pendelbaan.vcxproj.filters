@@ -22,4 +22,7 @@
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
+  <ItemGroup>
+    <Text Include="beschrijving.txt" />
+  </ItemGroup>
 </Project>
