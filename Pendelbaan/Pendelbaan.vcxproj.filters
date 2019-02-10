@@ -17,5 +17,9 @@
   <ItemGroup>
     <None Include="Pendelbaan.ino" />
   </ItemGroup>
- 
+  <ItemGroup>
+    <ClInclude Include="__vm\.Pendelbaan.vsarduino.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
 </Project>
