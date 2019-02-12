@@ -3,3 +3,16 @@ bit0  PWM duty cycle flag
 bit1  motor on(true)
 bit2 Startup adjust mode (true)
 bit3 direction (denderen melders)
+bit 4 Manual stop
+bit 5 versnellen on (true)
+bit 6 vertragen on (true)
+bit 7 init active (false)
+
+INIT_reg
+bit0 tijdmeting request
+bit1 tijdmeting klaar 
+
+
+traject
+1= van 1 naar 2
+2= van 2 naar 1
