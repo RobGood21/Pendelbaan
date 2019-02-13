@@ -2,11 +2,11 @@ COM_reg
 bit0  PWM duty cycle flag
 bit1  motor on(true)
 bit2 Startup adjust mode (true)
-bit3 direction (denderen melders)
+bit3 direction
 bit 4 Manual stop
 bit 5 versnellen on (true)
 bit 6 vertragen on (true)
-bit 7 init active (false)
+bit 7 request INIT_exe als true dan void uitvoeren called in loop
 
 INIT_reg
 bit0 tijdmeting request
@@ -14,5 +14,9 @@ bit1 tijdmeting klaar
 
 
 traject
-1= van 1 naar 2
-2= van 2 naar 1
+0= van 1 naar 2
+1= van 2 naar 1
+
+melder 0 op poort A5
+melder 1 op poort A4
+melder 2 op poort A3 (optioneel)
