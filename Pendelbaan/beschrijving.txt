@@ -3,7 +3,7 @@ bit0  PWM duty cycle flag
 bit1  motor on(true)
 bit2 Startup adjust mode (true)
 bit3 direction
-bit 4 Manual stop
+bit 4 all stop
 bit 5 versnellen on (true)
 bit 6 vertragen on (true)
 bit 7 request INIT_exe als true dan void uitvoeren called in loop
@@ -11,6 +11,7 @@ bit 7 request INIT_exe als true dan void uitvoeren called in loop
 INIT_reg
 bit0 tijdmeting request
 bit1 tijdmeting klaar 
+bit2 slow meting bezig
 
 
 traject
