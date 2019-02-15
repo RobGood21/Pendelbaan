@@ -12,6 +12,7 @@ INIT_reg
 bit0 tijdmeting request
 bit1 tijdmeting klaar 
 bit2 slow meting bezig
+bit3 count aantal gemeten routes
 
 
 traject
@@ -21,3 +22,7 @@ traject
 melder 0 op poort A5
 melder 1 op poort A4
 melder 2 op poort A3 (optioneel)
+
+
+
+routes 4>5 = route[0]  5>4=route[1]

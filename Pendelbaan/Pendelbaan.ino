@@ -10,7 +10,7 @@ byte COM_reg;
 byte INIT_reg;
 byte INIT_fase;
 int INIT_count;
-
+int tijd; //tijd meting duration route
 
 
 byte SW_old;
@@ -24,21 +24,18 @@ byte PWM_speed = 10;
 byte PWM_min = 50;
 byte PWM_max = 10;
 
-byte RUN_countA;
-byte RUN_countD;
+byte RUN_count[4];
 
-int RUN_dectijd;
-int routeDT[2]; //routes have there own stoptime, locs have different speeds
-byte route;
+
+int stoptijd;//tijd wanneer na begin route afremmen begint
+int routetijd[2]; //routes have there own stoptime, locs have different speeds 0=4>5 1=5>4
 byte laststop = 0; //vorige stop
 
 unsigned long Dectime;
 
 
-unsigned int RUN_stoptijd; //stoptijd in seconden
+unsigned int wachttijd; //stoptijd in seconden
 unsigned long RUN_time;
-
-byte traject;
 
 unsigned long RUN_meting;
 
@@ -52,7 +49,7 @@ void setup() {
 	//set pin7,8 as output
 	DDRB |= (1 << 0);
 	DDRD |= (1 << 7);
-	RUN_dectijd = 0xFF; //max tijd	
+	stoptijd = 0xFFFFFFFF; //max tijd	
 }
 
 void EEPROM_clear() {
@@ -82,6 +79,7 @@ void INIT_exe() {
 	COM_reg &= ~(1 << 7); //reset request flag
 	switch (INIT_fase) {
 	case 0:
+		INIT_reg &= ~(1 << 3); // reset teller voor route tijd metingen 
 		Serial.println("begin initialisatie");
 		//staat loc in station? bepaal huidig station
 		INIT_station();
@@ -90,14 +88,18 @@ void INIT_exe() {
 		Serial.println(laststop);
 
 		switch (laststop) { //set direction
-		case 5:
-			PORTB |= (1 << 0);
-			COM_reg |= (1 << 7);
-			break;
 		case 4:
 			PORTB &= ~(1 << 0);
 			COM_reg |= (1 << 7);
 			break;
+
+		case 5:
+			PORTB |= (1 << 0);
+			COM_reg |= (1 << 7);
+			break;
+
+
+
 		default:
 			//niet in station dus station opzoeken.
 			PWM_cycle = PWM_max;
@@ -110,23 +112,16 @@ void INIT_exe() {
 
 
 	case 1: //check minimum speed (if loc is moving then)
-		//INIT_reg |= (1 << 2); //flag for minimum speed meting
-		//if (bitRead(COM_reg, 2) == false) { ///waar is dit voor????
-		//	COM_reg &= ~(1 << 4); //reset manual switch to off
+
 		Serial.println("begin minimumsnelheids meting");
 		//stoploc();
-
-
 		//delay(1000);
 		PWM_cycle = PWM_min;
 		COM_reg |= (1 << 1); //start PWM send, motor on
-		INIT_fase = 2;	
+		INIT_fase = 2;
 		COM_reg |= (1 << 7); //request init
-
-
 		break;
-
-	case 2: 
+	case 2:
 		//check station
 		INIT_station();
 
@@ -144,35 +139,65 @@ void INIT_exe() {
 
 			COM_reg |= (1 << 7); //request INIT
 			INIT_count++;
-			Serial.println(INIT_count);
+			//Serial.println(INIT_count);
 		}
 		//}
 		break;
 	case 3:
+		Serial.println("nu case 3");
 		stoploc();
+		INIT_station();
+		switch (laststop) {
+		case 4:
+			PORTB &= ~(1 << 0);
+			break;
+		case 5:
+			PORTB |= (1 << 0);
+			break;
+		}
+		INIT_fase = 4;
+		RUN_start();
+		break;
+	case 4:
+		Serial.println("nu case 4");
+		stoploc();
+		//bepaal station
+		INIT_reg ^= (1 << 3); //count aantal gemeten routes, voorlopig twee
+		INIT_station();
+		switch (laststop) {
+		case 4: //route 5>4 =1
+			routetijd[1] = tijd;
+			break;
+		case 5: //route 4>5 =0
+			routetijd[0] = tijd;
+			break;
+		}
+
+		if (bitRead(INIT_reg, 3) == false) {
+			INIT_fase = 5; //stoppen
+		}
+		else {
+			INIT_fase = 3; //herhalen
+		}
+		COM_reg |= (1 << 7); //request init exe
 		break;
 
-	case 50://tijdmeting routes
-		//eerst stoppe...
-		COM_reg &= ~(1 << 4); //reset manual switch to off
-		PORTD &= ~(1 << 7); //PWM poort low			
-		COM_reg &= ~(1 << 1); //disable motor pwm
-		Serial.println("begin tijdmetingen");
-
-
-
+	case 5:
+		stoploc();
+		Serial.println("klaar....");
+		Serial.println(routetijd[0]);
+		Serial.println(routetijd[1]);
+		INIT_fase = 0; //start pendel
+		RUN_start();
 		break;
-	case 100:
-		Serial.println("nu niks meer.....");
-		break;
-		//INIT_reg |= (1 << 0); //request tijdmeting
-		//RUN_dectijd = 0xFFFFFFFF; //max time to slow down
 	}
 }
 void stoploc() {
 	COM_reg &= ~(1 << 4); //reset manual switch to off
 	PORTD &= ~(1 << 7); //PWM poort low			
 	COM_reg &= ~(1 << 1); //disable motor pwm
+
+	Serial.println("stoploc()");
 }
 void INIT_station() {
 	//bepaal station bij opstarten, initialiseren
@@ -192,50 +217,70 @@ void INIT_station() {
 		laststop = 0;
 		break;
 	}
-	Serial.print("INIT_station   : ");
-	Serial.println(laststop);
+	//Serial.print("INIT_station   : ");
+	//Serial.println(laststop);
 
 }
 
 void RUN_start() {
+	Serial.print("RUN_start begin in station:  ");
+	Serial.println(laststop);
+
+
+	RUN_count[1] = 0;
+	RUN_count[3] = 0;
+
+	COM_reg |= (1 << 4);
 	COM_reg |= (1 << 1);
-	COM_reg |= (1 << 5);
+	COM_reg |= (1 << 5); //set versnellen
+	
 	PWM_cycle = PWM_min;
 	RUN_meting = millis();
 
-	if (bitRead(INIT_reg, 0) == true) {
-		INIT_reg |= (1 << 1); //set program slow down time
-		INIT_reg &= ~(1 << 0); //reset reqest
-	}
-	else {
-		COM_reg |= (1 << 6); //activate run_dec()
-		Dectime = millis();
-
+	if (INIT_fase == 0) {
+		COM_reg |= (1 << 6); //set vertragen
+		switch (laststop) {
+		case 4:
+			stoptijd = routetijd[0] - 3000;
+			break;
+		case 5:
+			stoptijd = routetijd[1] - 3000;
+			break;
+		default:
+			//nu gaat het fout, opnieuw initialiseren????
+			Serial.println("gaat fout geen goed begin station");
+			break;
+		}
 	}
 }
 void RUN_acc() { //called every 20ms from loop
+	RUN_count[0]++;
+	if (RUN_count[0] > RUN_count[1]) { // random(0, 15);
 
-	RUN_countA++;
-	if (RUN_countA > 10) { // random(0, 15);
-		RUN_countA = 0;
+		RUN_count[3]++;
+		if (RUN_count[3] > 5) {
+			RUN_count[1]++;
+		}
+
+		RUN_count[0] = 0;
+
 		PWM_cycle--;
 		if (PWM_cycle <= PWM_max) {
-			COM_reg &= ~(1 << 5);
+			COM_reg &= ~(1 << 5); //stop versnellen
 		}
 	}
 }
 
 void RUN_dec() {
 
-	RUN_countD++;
-	if (RUN_countD > 10) {
-
-		RUN_countD = 0;
-		if (millis() - Dectime > RUN_dectijd) {
+	RUN_count[4]++;
+	if (RUN_count[4] > 10) {
+		RUN_count[4] = 0;
+		if (millis() - Dectime > stoptijd) {
 			COM_reg &= ~(1 << 5);  //stop versnellen
 			PWM_cycle++;
 			Serial.println(PWM_cycle);
-			if (PWM_cycle >= PWM_min) COM_reg &= ~(1 << 6);  //stop vertragen.
+			if (PWM_cycle > PWM_min) COM_reg &= ~(1 << 6);  //stop vertragen.
 		}
 	}
 }
@@ -243,35 +288,22 @@ void RUN_dec() {
 
 void RUN_stop(byte station) {
 
-	Serial.print("Runstop  station: ");
-	Serial.println(station);
+	//Serial.print("Runstop  station: ");
+	//Serial.println(station);
 
-	if (station != laststop & bitRead(COM_reg,4)==true) { //denderen in stopplaats voorkomen, never stop on 0
+	if (station != laststop & bitRead(COM_reg, 4) == true) { //denderen in stopplaats voorkomen, never stop on 0
 		PORTB ^= (1 << 0); //toggle direction
 
 		Serial.print("Runstop INIT_fase = ");
 		Serial.println(INIT_fase);
-		//TIJDmeting();
+		TIJDmeting();
 		//stop loc
 		PORTD &= ~(1 << 7); //PWM poort low			
 		COM_reg &= ~(1 << 1); //disable motor pwm
 
 		switch (INIT_fase) {
 		case 0: //init finished, normal operation
-
-			//find route
-			if (laststop > 0) {
-				if (laststop == 4 & station == 5)route = 0;
-				if (laststop == 5 & station == 4)route = 1;
-			}
-			else {
-				route = 20; //no route during init
-			}
-
-			Serial.print("route= ");
-			Serial.println(route);
-
-			RUN_stoptijd = 2000;
+			wachttijd = 2000;
 			RUN_time = millis();
 			COM_reg &= ~(1 << 6);  //stop vertragen.		
 			break;
@@ -344,17 +376,19 @@ void SW_read() {
 
 
 void TIJDmeting() { //0-9 routes 10=niet opslaan
-	int tijd;
-
-	tijd = (millis() - RUN_meting) / 1000;
-	if (bitRead(INIT_reg, 1) == true) {
-		RUN_dectijd = (tijd - 1) * 1000;
-		INIT_reg &= ~(1 << 1); //reset initialise
-	}
 
 
-	Serial.print("Vertragen na: ");
-	Serial.println(RUN_dectijd);
+	tijd = (millis() - RUN_meting);
+	/*
+
+		if (bitRead(INIT_reg, 1) == true) {
+			RUN_dectijd = (tijd - 1);
+			INIT_reg &= ~(1 << 1); //reset initialise
+		}
+
+	*/
+	//Serial.print("Vertragen na: ");
+	//Serial.println(RUN_dectijd);
 
 	//Serial.print("Snelheid: ");
 	//Serial.print(PWM_cycle);
@@ -374,8 +408,8 @@ void loop() {
 			PWM_clk();
 		}
 		else {
-			if (millis() - RUN_time > RUN_stoptijd) { //& bitRead(COM_reg,7)==true
-				//RUN_start();
+			if (millis() - RUN_time > wachttijd) { //& bitRead(COM_reg,7)==true
+				RUN_start();
 			}
 		}
 	}
@@ -385,8 +419,7 @@ void loop() {
 		SW_time = millis();
 		SW_read();
 		if (bitRead(COM_reg, 7) == true)INIT_exe();
-
-		//if (bitRead(COM_reg, 5) == true)RUN_acc(); //versnellen
-		//if (bitRead(COM_reg, 6) == true) RUN_dec(); //vertragen
+		if (bitRead(COM_reg, 5) == true)RUN_acc(); //versnellen
+		if (bitRead(COM_reg, 6) == true) RUN_dec(); //vertragen
 	}
 }
