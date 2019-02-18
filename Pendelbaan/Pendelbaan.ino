@@ -12,20 +12,22 @@ byte INIT_fase;
 int INIT_count;
 long tijd; //tijd meting duration route
 
+boolean DEBUGteksten = true; //geeft teksten op scherm maar beinvloed de snelheden en stoptijden...
 
 byte SW_old;
 unsigned long SW_time;
 unsigned long PWM_freq;
 unsigned long PWM_duty;
 
-byte PWM_cycle = 12; //=
-byte PWM_speed = 10;
+byte PWM_cycle;// = 12; //=
+byte PWM_speed;
 
 byte PWM_min = 50;
-byte PWM_max = 10;
+byte PWM_max;
 
-byte RUN_count[6];
-
+byte RUN_count[6]; //6 conters for run mode
+byte LED_count[10]; //10 available counters for blinking ledss
+byte LED_mode;
 
 int stoptijd;//tijd wanneer na begin route afremmen begint
 int routetijd[2]; //routes have there own stoptime, locs have different speeds 0=4>5 1=5>4
@@ -49,7 +51,10 @@ void setup() {
 	SW_old = PINC;
 	//set pin7,8 as output
 	DDRB |= (1 << 0);
-	DDRD |= (1 << 7);
+	DDRD |= (1 << 7); //output PIN7 enable H-bridge
+	DDRD |= (1 << 6); //Output PIN 6 Green control Led
+	DDRD |= (1 << 5); //output pin 5 red control led
+
 	stoptijd = 0xFFFFFFFF; //max tijd	
 }
 
@@ -80,14 +85,17 @@ void INIT_exe() {
 	COM_reg &= ~(1 << 7); //reset request flag
 	switch (INIT_fase) {
 	case 0:
+
 		INIT_reg &= ~(1 << 3); // reset teller voor route tijd metingen 
-		Serial.println("begin initialisatie");
+		PWM_speed = 10;
+		PWM_max = PWM_speed + 5;
+
+		LED_mode = 2;
+
+		if (DEBUGteksten == true) Serial.println("begin initialisatie");
+
 		//staat loc in station? bepaal huidig station
 		INIT_station();
-
-		//Serial.print("Begin station: ");
-		//Serial.println(laststop);
-
 		switch (laststop) { //set direction
 		case 4:
 			PORTB &= ~(1 << 0);
@@ -101,7 +109,7 @@ void INIT_exe() {
 			break;
 		default:
 			//niet in station dus station opzoeken.
-			PWM_cycle = PWM_max;
+			PWM_cycle = PWM_max;	//PWM_max;
 			COM_reg |= (1 << 1); //start PWM send, motor on
 			COM_reg &= ~(1 << 6); //disable slow down
 			newstation = 10;
@@ -113,7 +121,8 @@ void INIT_exe() {
 
 	case 1: //check minimum speed (if loc is moving then)
 
-		Serial.println("begin minimumsnelheids meting");
+		if (DEBUGteksten == true) Serial.println("begin minimumsnelheids meting");
+
 		//stoploc();
 		//delay(1000);
 		PWM_cycle = PWM_min;
@@ -129,7 +138,7 @@ void INIT_exe() {
 			//stoploc();			
 
 			INIT_count = 0;
-			Serial.println(" langzaam werkt");
+			if (DEBUGteksten == true) Serial.println(" langzaam werkt");
 			//loc keren terug naar station niet nodig denderen van contact maakt richting toch onduidelijk hier
 			PORTB ^= (1 << 0);
 			PWM_cycle = PWM_max;
@@ -139,12 +148,29 @@ void INIT_exe() {
 
 			COM_reg |= (1 << 7); //request INIT
 			INIT_count++;
-			//Serial.println(INIT_count);
+
+			if (INIT_count > 100) {
+				//stoploc();				
+				Serial.println("FOUT loc beweegt niet....");
+				//verleng aanstuurpuls
+				PWM_speed++;
+				PWM_max++;
+				INIT_count = 0;
+				//
+				Serial.println(PWM_speed);
+				if (PWM_speed > 16) {
+					stoploc();
+					Serial.println("Alles stop");
+					COM_reg &= ~(1 << 7);
+					//hier leds alarm geven 
+					LED_mode = 3;
+				}
+			}
+
 		}
 		//}
 		break;
 	case 3:
-		//Serial.println("nu case 3");
 		stoploc();
 		INIT_station();
 		switch (laststop) {
@@ -161,9 +187,7 @@ void INIT_exe() {
 		RUN_start();
 		break;
 	case 4:
-		//Serial.println("nu case 4");
 		stoploc();
-		
 		INIT_reg ^= (1 << 3); //count aantal gemeten routes, voorlopig twee
 		 //bepaal station
 		INIT_station();
@@ -188,12 +212,26 @@ void INIT_exe() {
 		break;
 
 	case 5:
-		//stoploc();
-		Serial.println("klaar....");
-		Serial.println(routetijd[0]);
-		Serial.println(routetijd[1]);
-		INIT_fase = 0; //start pendel
-		RUN_start();
+		if (DEBUGteksten == true) {
+			Serial.println("klaar....");
+			Serial.print("Route 0= ");
+			Serial.println(routetijd[0]);
+			Serial.print("Route 1= ");
+			Serial.println(routetijd[1]);
+		}
+		//check of beide metingen zijn gelukt, moeten ongeveer gelijk zijn
+
+		if (routetijd[0] > 0 & routetijd[1] > 0 & routetijd[0] * 2 > routetijd[1] & routetijd[1] * 2 > routetijd[0]) {
+			INIT_fase = 0; //start pendel
+			RUN_start();
+			LED_mode = 1;
+		}
+		else {
+			Serial.println("Tijdmeting is mislukt!!!!!");
+			INIT_fase = 0;
+			COM_reg |= (1 << 7); //request init exe, herhaal initialisatie
+			COM_reg |= (1 << 4);
+		}
 		break;
 	}
 }
@@ -201,8 +239,6 @@ void stoploc() {
 	COM_reg &= ~(1 << 4); //reset manual switch to off
 	PORTD &= ~(1 << 7); //PWM poort low			
 	COM_reg &= ~(1 << 1); //disable motor pwm
-
-	//Serial.println("stoploc()");
 }
 void INIT_station() {
 	//bepaal station bij opstarten, initialiseren
@@ -222,36 +258,39 @@ void INIT_station() {
 		laststop = 0;
 		break;
 	}
-	//Serial.print("INIT_station   : ");
-	//Serial.println(laststop);
 
 }
 
 void RUN_start() {
-	Serial.print("RUN_start begin in station:  ");
-	Serial.println(laststop);
-
+	if (DEBUGteksten == true) {
+		Serial.print("RUN_start begin in station:  ");
+		Serial.println(laststop);
+	}
 	RUN_count[1] = 0;
 	RUN_count[3] = 0;
 
 	COM_reg |= (1 << 4);
 	COM_reg |= (1 << 1);
 	COM_reg |= (1 << 5); //set versnellen
-	
+
 	PWM_cycle = PWM_min;
 	RUN_meting = millis();
+
 
 	if (INIT_fase == 0) {
 		COM_reg |= (1 << 6); //set vertragen
 		Dectime = millis(); //reset counter voor begin vertragen
+		LED_control(laststop);
 		switch (laststop) {
 		case 4:
 			newstation = 5;
+			PORTB &= ~(1 << 0);
 			stoptijd = routetijd[0] - 3000;
 			break;
 		case 5:
 			newstation = 4;
 			stoptijd = routetijd[1] - 3000;
+			PORTB |= (1 << 0);
 			break;
 		default:
 			//nu gaat het fout, opnieuw initialiseren????
@@ -259,7 +298,81 @@ void RUN_start() {
 			break;
 		}
 	}
+	if (DEBUGteksten == true) {
+		Serial.print("Newstation=: ");
+		Serial.println(newstation);
+	}
 }
+void LED_blink() {  //called from SW_read
+	switch (LED_mode) {
+	case  0:
+
+		break;
+	case 1: //normal mode
+		break;
+	case 2: //init
+		LED_init();
+		//counter 400ms
+		LED_count[0]++;
+		if (LED_count[0] > 20) {
+			LED_count[0] = 0;
+			//payload of this counter
+			INIT_reg |= (1 << 4);
+			LED_count[1] = 0;
+		}
+
+		LED_count[1]++; //counter 40ms
+		if (LED_count[1] > 2) {
+			LED_count[1] = 0;
+			INIT_reg &= ~(1 << 4);
+		}
+		break;
+	case 3: //loc staat stil
+		LED_count[0]++;
+		PORTD &= ~(1 << 6); //kill green led
+		if (LED_count[0] > 5) {
+			LED_count[0] = 0;
+			PIND |= (1 << 5); //flash red led
+		}
+		break;
+	case 4:
+		break;
+	}
+}
+void LED_init() {
+	if (INIT_fase > 0 & bitRead(COM_reg, 4) == true) {
+		if (bitRead(INIT_reg, 4) == true) {
+			LED_control(10);
+		}
+		else {
+			LED_control(0);
+		}
+	}
+}
+
+
+void LED_control(byte lprg) {
+	switch (lprg) {
+	case 0:
+		PORTD &= ~(1 << 6);
+		PORTD &= ~(1 << 5);
+		break;
+	case 4:
+		PORTD |= (1 << 6);
+		PORTD &= ~(1 << 5);
+		break;
+	case 5:
+		PORTD |= (1 << 5);
+		PORTD &= ~(1 << 6);
+		break;
+	case 10:
+		PORTD |= (1 << 6);
+		PORTD |= (1 << 5);
+		break;
+
+	}
+}
+
 void RUN_acc() { //called every 20ms from loop
 	RUN_count[0]++;
 	if (RUN_count[0] > RUN_count[1]) { // random(0, 15);
@@ -271,7 +384,8 @@ void RUN_acc() { //called every 20ms from loop
 		RUN_count[0] = 0;
 
 		PWM_cycle--;
-		if (PWM_cycle <= PWM_max) {
+
+		if (PWM_cycle < PWM_max) {
 			COM_reg &= ~(1 << 5); //stop versnellen
 		}
 	}
@@ -285,7 +399,6 @@ void RUN_dec() {
 		if (millis() - Dectime > stoptijd) {
 			COM_reg &= ~(1 << 5);  //stop versnellen
 			PWM_cycle++;
-			Serial.println(PWM_cycle);
 			if (PWM_cycle > PWM_min) COM_reg &= ~(1 << 6);  //stop vertragen.
 		}
 	}
@@ -293,28 +406,51 @@ void RUN_dec() {
 
 
 void RUN_stop(byte station) {
-
-	//Serial.print("Runstop  station: ");
-	//Serial.println(station);
+	byte route;
 	if (newstation == 10)newstation = station; //stoppen in alle stations, op zoek naar begin station
+
 	if (station == newstation & bitRead(COM_reg, 4) == true) { //denderen in stopplaats voorkomen, never stop on 0
-		PORTB ^= (1 << 0); //toggle direction
-
-		Serial.print("Runstop INIT_fase = ");
-		Serial.println(INIT_fase);
-
+		if (DEBUGteksten == true) {
+			Serial.print("Runstop  station: ");
+			Serial.println(station);
+		}
 		TIJDmeting();
-		//stop loc
 		PORTD &= ~(1 << 7); //PWM poort low			
 		COM_reg &= ~(1 << 1); //disable motor pwm
 
 		switch (INIT_fase) {
 		case 0: //init finished, normal operation
+			LED_control(0);
+
 			wachttijd = 2000;
 			RUN_time = millis();
 			COM_reg &= ~(1 << 6);  //stop vertragen.		
+
+			switch (station) {
+			case 4:
+				route = 1;
+				break;
+			case 5:
+				route = 0;
+				break;
+			}
+			if (PWM_cycle > PWM_min) {
+				routetijd[route] = routetijd[route] + 200;
+			}
+			else {
+				routetijd[route] = routetijd[route] - 200;
+			}
+			if (DEBUGteksten == true) {
+				Serial.print("route: ");
+				Serial.print(route);
+				Serial.print(",  Tijd tot vertragen: ");
+				Serial.println(routetijd[route]);
+				Serial.println("");
+			}
+
 			break;
 		default:
+			PORTB ^= (1 << 0); //toggle direction
 			INIT_exe();
 			break;
 		}
@@ -324,7 +460,8 @@ void RUN_stop(byte station) {
 
 
 
-void SW_read() {
+void SW_read() { // called fromm loop
+	LED_blink();
 
 	byte changed;
 	byte swnew;
@@ -353,21 +490,26 @@ void SW_read() {
 						else {
 							PORTB ^= (1 << 0); //toggle direction
 							laststop = 0;
+							newstation = 10;
+
 						}
 						break;
+
 					case 1:
+						//INIT_fase = 0;
+
 						COM_reg ^= (1 << 4); //manual stop
 
 						if (bitRead(COM_reg, 4) == false) { //all stop
-							COM_reg &= ~(1 << 1);
-							PORTD &= ~(1 << 7);
-
+							stoploc();
+							LED_control(0); //kill leds
 						}
-						else { //Start manual
+						else { //Start manual							
 							INIT_fase = 0;
 							INIT_exe();
 						}
 						break;
+
 					case 4: //track sensor 4 released, train left station 4
 						break;
 					case 5: //train left station 5
@@ -384,15 +526,11 @@ void SW_read() {
 
 void TIJDmeting() { //0-9 routes 10=niet opslaan
 	tijd = (millis() - RUN_meting);
-		Serial.print("Tijd  ");
-	Serial.print(tijd);
-	Serial.println(" sec.");
 }
 void SW_both() {
 	Serial.println("beide knoppen");
 }
 void loop() {
-
 	if (bitRead(COM_reg, 4) == true) {
 		//pwm 
 		if (bitRead(COM_reg, 1) == true) {
@@ -404,7 +542,6 @@ void loop() {
 			}
 		}
 	}
-
 	//check input
 	if (millis() - SW_time > 20) {
 		SW_time = millis();

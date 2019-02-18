@@ -13,6 +13,15 @@ bit0 tijdmeting request
 bit1 tijdmeting klaar 
 bit2 slow meting bezig
 bit3 count aantal gemeten routes
+bit4 flag for blinking leds during init
+
+
+
+byte Ledmode
+0=niks
+1=in bedrijf
+2=initialisatie
+3=Trein staat stil
 
 
 traject
