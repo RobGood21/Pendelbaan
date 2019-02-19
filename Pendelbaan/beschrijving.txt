@@ -14,7 +14,7 @@ bit1 tijdmeting klaar
 bit2 slow meting bezig
 bit3 count aantal gemeten routes
 bit4 flag for blinking leds during init
-
+bit5 instelling mode aan
 
 
 byte Ledmode

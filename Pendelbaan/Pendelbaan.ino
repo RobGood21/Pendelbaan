@@ -45,9 +45,11 @@ unsigned long RUN_meting;
 
 void setup() {
 	Serial.begin(9600);
-	//EEPROM_clear();  //optional clear the eeprom memory
+	//EEPROM_clear();  //optional clear the eeprom memory.
+
 	DDRC = 0; //set port C as input (pins A0~A5)
-	PORTC = 0xFF; //set pull up resisters to port C
+	PORTC = 0xFF; //set pull up resisters to port C, also with hardware
+
 	SW_old = PINC;
 	//set pin7,8 as output
 	DDRB |= (1 << 0);
@@ -241,17 +243,24 @@ void stoploc() {
 	COM_reg &= ~(1 << 1); //disable motor pwm
 }
 void INIT_station() {
-	//bepaal station bij opstarten, initialiseren
+	//calc current station 
+
+	//*******DIT KAN ZO NIET, je kunt nu de melders niet omdraaien.
+	//In eerste start moet bepaald worden welk station welk is en dit vast houden.
+	//Hier moet deze gevonden waarde dan worden vergeleken met de gemeten melders....
+	//succe....
+
+
 	byte stn;
 	stn = PINC;
 	stn = stn << 2;
 	stn = stn >> 5;
 	switch (stn) {
 	case 3:
-		laststop = 4;
+		laststop = 5; //ff omgegekeerd...
 		break;
 	case 5:
-		laststop = 5;
+		laststop = 4;
 		break;
 	default:
 		//als meer stopplaatsen worden gemaakt dan hier meer opties
@@ -259,6 +268,8 @@ void INIT_station() {
 		break;
 	}
 
+	Serial.print("INIT station gevonden laststop= ");
+	Serial.println(laststop);
 }
 
 void RUN_start() {
@@ -462,57 +473,92 @@ void RUN_stop(byte station) {
 
 void SW_read() { // called fromm loop
 	LED_blink();
-
 	byte changed;
 	byte swnew;
+	byte instel;
 	swnew = PINC;
 	changed = swnew ^ SW_old;
 	if (changed > 0) {
 
+		//check if both buttons pressed
+		instel = swnew << 6;
+		if (instel == 0) SW_both();
+
 		for (byte i = 0; i < 6; i++) {
 			if (bitRead(changed, i) == true) {
-				if (bitRead(swnew, i) == true) { //port is high
-					switch (i) {
-					case 4:
-						RUN_stop(i);
-						break;
-					case 5:
-						RUN_stop(i);
-						break;
+				if (bitRead(swnew, i) == true) { //port C is high
+
+					if (bitRead(INIT_reg, 5) == false) { //geen instellingen
+						switch (i) {
+						case 4:
+							//RUN_stop(i);
+							break;
+						case 5:
+							//RUN_stop(i);
+							break;
+						}
+					}
+					else { //Instellingen actief
+						switch (i) {
+						case 4:
+							PORTD &= ~(1 << 6);
+							break;
+						case 5:
+							PORTD &= ~(1 << 5);
+							break;
+						}
 					}
 				}
+
 				else { //port is low
+
 					switch (i) {
 					case 0:
-						if (bitRead(swnew, 1) == false) {
-							SW_both();
-						}
-						else {
+
+						if (bitRead(INIT_reg, 5) == false) {
 							PORTB ^= (1 << 0); //toggle direction
 							laststop = 0;
 							newstation = 10;
-
 						}
+
 						break;
 
 					case 1:
-						//INIT_fase = 0;
 
-						COM_reg ^= (1 << 4); //manual stop
+						if (bitRead(INIT_reg, 5) == false) {
 
-						if (bitRead(COM_reg, 4) == false) { //all stop
-							stoploc();
-							LED_control(0); //kill leds
+							COM_reg ^= (1 << 4); //manual stop
+							if (bitRead(COM_reg, 4) == false) { //all stop
+								stoploc();
+								LED_control(0); //kill leds
+							}
+							else { //Start manual							
+								INIT_fase = 0;
+								INIT_exe();
+							}
+
 						}
-						else { //Start manual							
-							INIT_fase = 0;
-							INIT_exe();
-						}
+
 						break;
 
 					case 4: //track sensor 4 released, train left station 4
+						if (bitRead(INIT_reg, 5) == true) {
+							PORTD |= (1 << 6);
+						}
+						else {
+							RUN_stop(i);
+						}
+
+
+
 						break;
 					case 5: //train left station 5
+						if (bitRead(INIT_reg, 5) == true) {
+							PORTD |= (1 << 5);
+						}
+						else {
+							RUN_stop(i);
+						}
 						break;
 					}
 				}
@@ -528,8 +574,19 @@ void TIJDmeting() { //0-9 routes 10=niet opslaan
 	tijd = (millis() - RUN_meting);
 }
 void SW_both() {
-	Serial.println("beide knoppen");
+	Serial.println("beide knoppen, begin instellingen");
+	stoploc();
+	//INIT_fase = 0;
+	LED_mode = 0;
+	INIT_reg ^= (1 << 5); //toggle instellingen aan uit
+	if (bitRead(INIT_reg, 5) == true) {
+		LED_control(10);
+	}
+	else {
+		LED_control(0);
+	}
 }
+
 void loop() {
 	if (bitRead(COM_reg, 4) == true) {
 		//pwm 
