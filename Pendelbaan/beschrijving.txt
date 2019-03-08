@@ -14,7 +14,12 @@ bit1 tijdmeting klaar
 bit2 slow meting bezig
 bit3 count aantal gemeten routes
 bit4 flag for blinking leds during init
-bit5 instelling mode aan
+bit5 nc
+bit6 PWM out put high
+
+PRG_reg
+
+PRG_fase
 
 
 byte Ledmode
@@ -28,10 +33,26 @@ traject
 0= van 1 naar 2
 1= van 2 naar 1
 
-melder 0 op poort A5
-melder 1 op poort A4
-melder 2 op poort A3 (optioneel)
+melder1 (eagle)  op poort A4 = station 5 = rode led op PIN 5
+melder2 (eagle)  op poort A5 = station 3 = groene led op PIN 6
+
+MEM_reg
+bit0 keren melder 1
+bit1 keren bij melder 2
+bit2
+bit3
+bit4
+bit5
+bit6
+bit7
+
 
 
 
 routes 4>5 = route[0]  5>4=route[1]
+
+
+EEPROM adressen
+3= startrichting melder adres 3
+5= idem melder 5
+10=melder 3 keren (true) bit0=melder 1 bit1=melder 2
