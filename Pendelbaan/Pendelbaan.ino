@@ -26,7 +26,7 @@ byte PWM_cycle; //tijd tussen twee pulsen in ms
 unsigned long PWM_pulstime; //timer voor pwm puls breedte
 byte PWM_puls; //ingestelde breedte van puls in ms
 
-byte PWM_min = 38;
+byte PWM_min = 50;
 byte PWM_max;
 
 byte PRG_fase = 0;
@@ -183,21 +183,7 @@ void INIT_exe() {
 
 		if (EEPROM.read(STATION_adres[1]) != STATION_dir[1]) {
 			EEPROM.write(STATION_adres[1], STATION_dir[1]);
-			//Serial.println("write in EEPROM");
 		}
-		/*
-		Serial.print("Adres station0= ");
-		Serial.print(STATION_adres[0]);
-		Serial.print(",  Richting=");
-		Serial.println(STATION_dir[0]);
-
-		Serial.print("Adres station1= ");
-		Serial.print(STATION_adres[1]);
-		Serial.print(",  Richting=");
-		Serial.println(STATION_dir[1]);
-		*/
-		//toggle direction ALTIJD ook als turn uit staat 		 
-		//RUN_dir();	
 
 		RUN_dir(true);
 		INIT_fase = 2;
@@ -265,7 +251,6 @@ void INIT_exe() {
 		else {
 			newstation = 3;
 		}
-
 		INIT_fase = 5;
 		RUN_start();
 		break;
@@ -281,32 +266,16 @@ void INIT_exe() {
 	case 10:
 		RUN_route();
 
-		Serial.println("klaar....");
-		Serial.print("Route 0= ");
-		Serial.println(routetijd[0]);
-		Serial.print("Route 1= ");
-		Serial.println(routetijd[1]);
-		//stoploc();
-		//check of beide metingen zijn gelukt, moeten ongeveer gelijk zijn
-
-		if (routetijd[0] > 0 & routetijd[1] > 0 & routetijd[0] * 2 > routetijd[1] & routetijd[1] * 2 > routetijd[0]) {
-			INIT_fase = 0; //start pendel
-//waarschijnlijk een nodige kering omdat de kering in run_stop niet wordt gedaan, was eerder in run start
-			RUN_dir(false);
-
-
-			RUN_start();
-			LED_mode = 1;
-
-
-
+		for (byte i = 0; i < 4; i++) {
+			Serial.print("Route ");
+			Serial.print(i);
+			Serial.print(", Tijd= ");
+			Serial.println(routetijd[i]);
 		}
-		else {
-			Serial.println("Tijdmeting is mislukt!!!!!");
-			INIT_fase = 0;
-			COM_reg |= (1 << 7); //request init exe, herhaal initialisatie
-			COM_reg |= (1 << 4);
-		}
+		INIT_fase = 0; //start pendel
+		RUN_dir(false);
+		RUN_start();
+		LED_mode = 1;
 		break;
 	}
 }
@@ -336,34 +305,42 @@ void RUN_dl() { //dl=direction locomotive
 	if (bitRead(COM_reg, 3) == true) PORTB |= (1 << 0);
 }
 void RUN_route() {
-	boolean meld = false;
-	/*
-	Meting twee keer.
-	Meerdere opties door wel of niet keren:
-	1 beide melders gelijk
-	2 melders ongelijk
-	*/
-	if (bitRead(MEM_reg, 0) == bitRead(MEM_reg, 1)) meld = true;//melders gelijk
+	//bepalen hoe de sensors keren
+	byte sd;
+	sd = MEM_reg << 6; //only bit 0 and 1
+	sd = sd >> 6;
+	tijd = tijd - 4000; //gemeten tijd zonder remmen minus geschatte afremtijd
+	switch (sd) {
+	case 0: //beide niet keren
+		if (station == 5) { //driven from 3 to 5
+			routetijd[0] = tijd;
+			routetijd[3] = tijd; //direction true		
+		}
+		else { //driven 5 to 3
+			routetijd[1] = tijd;
+			routetijd[2] = tijd;
+		}
+		break;
+	case 3: //beide keren
+		if (station == 5) { //driven from 3 to 5
+			routetijd[0] = tijd;
+			routetijd[1] = tijd; //direction true		
+		}
+		else { //driven 5 to 3
+			routetijd[2] = tijd;
+			routetijd[3] = tijd;
+		}
 
-	tijd = tijd - 3000; //gemeten tijd zonder remmen minus geschatte afremtijd
-	if (station == 5) { //driven from 3 to 5
-		routetijd[0] = tijd;
-		if (meld == true) {
-			routetijd[2] = tijd;
-		}
-		else {
-			routetijd[3] = tijd;
-		}
+		break;
+	default: // 1 station niet keren
+
+		break;
 	}
-	else { //driven 5 to 3
-		routetijd[1] = tijd;
-		if (meld == true) {
-			routetijd[3] = tijd;
-		}
-		else {
-			routetijd[2] = tijd;
-		}
-	}
+
+
+
+
+
 }
 
 void stoploc() {
@@ -374,7 +351,7 @@ void stoploc() {
 }
 void startloc() {
 	//used in INIT_exe to start loc during setup
-	PWM_cycle = PWM_max;	//PWM_max;
+	PWM_cycle = PWM_max;// PWM_min;//PWM_max;	//PWM_max;
 	COM_reg |= (1 << 1); //start PWM send, motor on
 	COM_reg &= ~(1 << 6); //disable slow down	
 }
@@ -394,55 +371,54 @@ byte INIT_station() {
 }
 
 void RUN_start() {
-
 	byte temp;
-
-	//	Serial.print("RUN_start begin in station:  ");
-	//	Serial.println(station);
 	RUN_count[1] = 0;
 	RUN_count[3] = 0;
-
 	COM_reg |= (1 << 4);
 	COM_reg |= (1 << 1);
 	COM_reg |= (1 << 5); //set versnellen
-
 	PWM_cycle = PWM_min;
-
 	if (INIT_fase == 0) {
 		COM_reg |= (1 << 6); //set vertragen
 		Dectime = millis(); //reset counter voor begin vertragen
 		LED_control(station);
-
-		//tijd tot afremmen bepalen 4 keuzes
 		switch (station) {
 		case 3:
 			newstation = 5;
-			stoptijd = routetijd[0];
-			if (bitRead(COM_reg, 3) == false)stoptijd = routetijd[2];
+			if (bitRead(COM_reg, 3) == false) {
+				stoptijd = routetijd[0];
+				temp = 0;
+			}
+			else {
+				stoptijd = routetijd[2];
+				temp = 2;
+			}
 			break;
 		case 5:
 			newstation = 3;
-			stoptijd = routetijd[1];
-			if (bitRead(COM_reg, 3) == false)stoptijd = routetijd[3];
+			if (bitRead(COM_reg, 3) == false) {
+				stoptijd = routetijd[1];
+				temp = 1;
+			}
+			else {
+				stoptijd = routetijd[3];
+				temp = 3;
+			}
 			break;
 		default:
 			//nu gaat het fout, opnieuw initialiseren????
 			Serial.println("gaat fout geen goed begin station");
 			break;
 		}
-		Serial.print("Stoptijd: ");
+		Serial.print("route= ");
+		Serial.print(temp);
+		Serial.print(",  Stoptijd: ");
 		Serial.println(stoptijd);
-
-		//Serial.print("route: ");
-		//Serial.print(route);
-		//Serial.print(",  Tijd tot vertragen: ");
-		//Serial.println(routetijd[route]);
-
 	}
 	else {
 		RUN_meting = millis();
+		Serial.println("start meting");
 	}
-
 }
 void LED_blink() {  //called every 20ms from SW_read
 	switch (LED_mode) {
@@ -584,78 +560,57 @@ void RUN_stop() {
 		oldstation = station;
 		//	Serial.print("Runstop station: ");
 		//	Serial.println(station);
-		//TIJDmeting();
+		TIJDmeting();
 		COM_reg &= ~(1 << 0);
 		PORTD &= ~(1 << 7); //PWM poort low			
 		COM_reg &= ~(1 << 1); //disable motor pwm
 		switch (INIT_fase) {
 		case 0: //init finished, normal operation
-			/*
-			hier moet richting en route worden bepaald, bedenk de loc kan gekeerd zijn... dit kan niet dus richting later aanpassen
-			eerst dus de afgelegde route de tid opslaan, richting is nu nog als die route
-			*/
 			switch (station) {
-			case 3:
-				route = 1;
-				if (bitRead(COM_reg, 3) == false)route = 3;
+			case 3: //van 5 > 3				
+				if (bitRead(COM_reg, 3) == false) {
+					route = 1;
+				}
+				else {
+					route = 3;
+				}
 				break;
-			case 5:
-				route = 0;
-				if (bitRead(COM_reg, 3) == false)route = 2;
+			case 5: //van 3>>5				
+				if (bitRead(COM_reg, 3) == false) {
+					route = 0;
+				}
+				else {
+					route = 2;
+				}
 				break;
 			}
+
+			Serial.print("PWM cycle= ");
+			Serial.println(PWM_cycle);
+
+
+
 			if (PWM_cycle >= PWM_min) { //hoe hoger pwm_min hoe langzamer de loc bij true dus te langzaam aangekomen
-				//if (PWM_cycle - PWM_min > 5) routetijd[route] = routetijd[route] + 200;
-				routetijd[route] = routetijd[route] + 200;
+				if (PWM_cycle - PWM_min > 10) routetijd[route] = routetijd[route] + 500;
+				routetijd[route] = routetijd[route] + 400;
 			}
 			else {
-				if (PWM_min - PWM_cycle > 20)routetijd[route] = routetijd[route] - 200;
-
-				routetijd[route] = routetijd[route] - 100;
+				if (PWM_min - PWM_cycle > 10)routetijd[route] = routetijd[route] - 500;
+				routetijd[route] = routetijd[route] - 400;
 			}
+			Serial.print("aangepaste route= ");
+			Serial.println(route);
+			Serial.println("");
+
 
 			RUN_dir(false); //richting instellen
 			LED_control(0);
 			wachttijd = 2000;
 			RUN_wachttijd = millis();
 			COM_reg &= ~(1 << 6);  //stop vertragen.
-
-			break;
-		case 10: //start init searching station,**********WERKT NIET    zonlicht op melders, aan werken als pcb klaar is. 
-			//bij ongelijke melder kering, alleen beginnen in melder die keert.
-
-			if (bitRead(MEM_reg, 0) == bitRead(MEM_reg, 1)) {
-				INIT_exe();
-			}
-			else {
-				Serial.println(station);
-				Serial.println(bitRead(MEM_reg, 0));
-				if (station == 5) {
-					if (bitRead(MEM_reg, 0) == true) {
-						INIT_exe;
-					}
-					else {
-						newstation = 3;
-						startloc();
-					}
-				}
-				else { //station=3
-					if (bitRead(MEM_reg, 1) == true) {
-						INIT_exe();
-					}
-					else {
-						newstation = 5;
-						startloc();
-					}
-				}
-			}
-
 			break;
 
 		default:
-			//PORTB ^= (1 << 0); //toggle direction
-			//Serial.println("keren stop");
-			TIJDmeting();
 			INIT_exe();
 			break;
 		}
@@ -813,7 +768,7 @@ void SW_both() {
 	}
 }
 void MEM_changed() {
-if (EEPROM.read(10) != MEM_reg) EEPROM.write(10, MEM_reg);
+	if (EEPROM.read(10) != MEM_reg) EEPROM.write(10, MEM_reg);
 }
 void loop() {
 	if (bitRead(COM_reg, 4) == true) {
