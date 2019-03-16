@@ -127,6 +127,7 @@ void INIT_exe() {
 	switch (INIT_fase) {
 	case 0:
 		INIT_reg &= ~(1 << 3); // reset teller voor route tijd metingen 
+
 		PWM_puls = 10;
 		PWM_max = PWM_puls + 2;
 		oldstation = 20;
@@ -209,7 +210,7 @@ void INIT_exe() {
 			//loc keren terug naar station niet nodig denderen van contact maakt richting toch onduidelijk hier			
 
 			RUN_dir(true); //direction
-			PWM_puls++; //8mrt minimum snelheid 1 tikje hoger zetten
+			PWM_puls ++; //pulsbreedte 1 ms langer		
 			PWM_cycle = PWM_max;
 			INIT_fase = 4;
 			oldstation = 0;
@@ -307,21 +308,35 @@ void RUN_dl() { //dl=direction locomotive
 void RUN_route() {
 	//bepalen hoe de sensors keren
 	byte sd;
+
 	sd = MEM_reg << 6; //only bit 0 and 1
 	sd = sd >> 6;
-	tijd = tijd - 4000; //gemeten tijd zonder remmen minus geschatte afremtijd
+
+
+	if (sd == 0 | sd == 3) {
+		tijd = tijd - ((tijd / 100) * 35); //tijd minus %
+		tijd = tijd - 1000; //vaste waarde
+	}
+	else {
+		tijd = tijd - ((tijd / 100) * 30); //tijd minus %
+	}
+
+
 	switch (sd) {
 	case 0: //beide niet keren
+
+
 		if (station == 5) { //driven from 3 to 5
 			routetijd[0] = tijd;
-			routetijd[3] = tijd; //direction true		
+			routetijd[2] = tijd; //direction true		
 		}
 		else { //driven 5 to 3
 			routetijd[1] = tijd;
-			routetijd[2] = tijd;
+			routetijd[3] = tijd;
 		}
 		break;
 	case 3: //beide keren
+
 		if (station == 5) { //driven from 3 to 5
 			routetijd[0] = tijd;
 			routetijd[1] = tijd; //direction true		
@@ -334,13 +349,32 @@ void RUN_route() {
 		break;
 	default: // 1 station niet keren
 
+		Serial.print("richting= ");
+		Serial.println(bitRead(COM_reg,3));
+		if (station == 5) { //driven from 3 to 5
+			
+			if (bitRead(COM_reg, 3) == false) {
+				routetijd[0] = tijd;
+				routetijd[3] = tijd; //direction true	
+			}
+			else { //vooruit
+				routetijd[2] = tijd;
+				routetijd[1] = tijd;
+			}
+		}
+		else { //driven 5 to 3
+			
+			if (bitRead(COM_reg, 3) == false) {
+				routetijd[1] = tijd;
+				routetijd[2] = tijd; //direction true	
+			}
+			else {
+				routetijd[0] = tijd;
+				routetijd[3] = tijd; //direction true	
+			}
+		}
 		break;
 	}
-
-
-
-
-
 }
 
 void stoploc() {
@@ -527,7 +561,7 @@ void LED_control(byte lprg) {
 void RUN_acc() { //called every 20ms from loop
 	RUN_count[0]++;
 
-	if (RUN_count[0] > 15) {
+	if (RUN_count[0] > 12) {
 		RUN_count[0] = 0;
 		PWM_cycle--;
 		if (PWM_cycle < PWM_max) {
@@ -591,12 +625,14 @@ void RUN_stop() {
 
 
 			if (PWM_cycle >= PWM_min) { //hoe hoger pwm_min hoe langzamer de loc bij true dus te langzaam aangekomen
-				if (PWM_cycle - PWM_min > 10) routetijd[route] = routetijd[route] + 500;
-				routetijd[route] = routetijd[route] + 400;
+				if (PWM_cycle - PWM_min > 20) routetijd[route] = routetijd[route] + 600;
+				if (PWM_cycle - PWM_min > 10) routetijd[route] = routetijd[route] + 400;
+				routetijd[route] = routetijd[route] + 300;
 			}
 			else {
-				if (PWM_min - PWM_cycle > 10)routetijd[route] = routetijd[route] - 500;
-				routetijd[route] = routetijd[route] - 400;
+				if (PWM_min - PWM_cycle > 20)routetijd[route] = routetijd[route] - 600;
+				if (PWM_min - PWM_cycle > 10)routetijd[route] = routetijd[route] - 400;
+				routetijd[route] = routetijd[route] - 300;
 			}
 			Serial.print("aangepaste route= ");
 			Serial.println(route);
@@ -608,6 +644,39 @@ void RUN_stop() {
 			wachttijd = 2000;
 			RUN_wachttijd = millis();
 			COM_reg &= ~(1 << 6);  //stop vertragen.
+			break;
+
+		case 1:
+			if (bitRead(MEM_reg, 1) == bitRead(MEM_reg, 0)) {
+				INIT_exe();
+			}
+			else {
+				Serial.println("ongelijke melders");
+				switch (station) {
+				case 3:
+					if (bitRead(MEM_reg, 0) == true) {
+						//doorgaan met INIT
+						INIT_exe();
+					}
+					else {
+						Serial.println("stil blijven staan");
+						startloc();
+						newstation = 10;
+					}
+					break;
+				case 5:
+					if (bitRead(MEM_reg, 1) == true) {
+						INIT_exe();
+					}
+					else {
+						Serial.println("hier straks doorrijden");
+						startloc();
+						newstation = 10;
+					}
+					break;
+				}
+
+			}
 			break;
 
 		default:
