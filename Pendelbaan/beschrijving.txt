@@ -9,13 +9,13 @@ bit 6 vertragen on (true)
 bit 7 request INIT_exe als true dan void uitvoeren called in loop
 
 INIT_reg
-bit0 tijdmeting request
-bit1 tijdmeting klaar 
-bit2 slow meting bezig
-bit3 count aantal gemeten routes
+bit0 flag start timer loc moves to slow
+bit1 flag speed loc to be raised
+bit2 flag tijdmeting in action
+bit3 nc
 bit4 flag for blinking leds during init
 bit5 nc
-bit6 PWM out put high
+bit6 nc
 
 PRG_reg
 
@@ -39,8 +39,8 @@ melder2 (eagle)  op poort A5 = station 3 = groene led op PIN 6
 MEM_reg
 bit0 keren melder 1
 bit1 keren bij melder 2
-bit2
-bit3
+bit2 Melder 1 random stop true = random false is set melder 3
+bit3 Melder 2 random stop melder 5
 bit4
 bit5
 bit6
