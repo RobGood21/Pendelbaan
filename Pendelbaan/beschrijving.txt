@@ -12,7 +12,7 @@ INIT_reg
 bit0 flag start timer loc moves to slow
 bit1 flag speed loc to be raised
 bit2 flag tijdmeting in action
-bit3 nc
+bit3 flag used in led_blink
 bit4 flag for blinking leds during init
 bit5 nc
 bit6 nc
@@ -41,7 +41,7 @@ bit0 keren melder 1
 bit1 keren bij melder 2
 bit2 Melder 1 random stop true = random false is set melder 3
 bit3 Melder 2 random stop melder 5
-bit4
+bit4 direction in start
 bit5
 bit6
 bit7
