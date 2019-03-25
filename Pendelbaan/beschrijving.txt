@@ -14,7 +14,7 @@ bit1 flag speed loc to be raised
 bit2 flag tijdmeting in action
 bit3 flag used in led_blink
 bit4 flag for blinking leds during init
-bit5 nc
+bit5 flag all stop
 bit6 nc
 
 PRG_reg

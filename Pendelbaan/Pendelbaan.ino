@@ -1,11 +1,20 @@
 /*
- Name:		Pendelbaan.ino
+ Name:		Pendelbaan.ino V1-01
  Created:	2/10/2019 11:11:06 AM
  Author:	Rob Antonisse
  Web: www.wisselmotor.nl
 
- Programma voor het maken van een PenDel baan voor de modelspoor.
-*/
+ Sketch for Arduino UNO.
+ Shuttle train module for direct current model trains
+ Seperate power supply possible for train or usage of 12V supplied to DC connection Arduino.
+ Two position sensors needed.
+ Power 5V if needed for sensors suppied by module.
+ Works with high active and low active sensors.
+ More info www.wisselmotor.nl
+ free for hobby, for commercial use please contact wisselmotor. nl.
+ Special Arduino shield "PenDel dc" available.
+ */
+
 #include <EEPROM.h> //use build in eeprom program
 byte COM_reg;
 byte INIT_reg;
@@ -44,7 +53,7 @@ unsigned int wachttijd; //stoptijd in seconden
 unsigned long RUN_wachttijd;
 unsigned long RUN_meting;
 
-void setup() {	
+void setup() {
 	Serial.begin(9600);
 	DDRC = 0; //set port C as input (pins A0~A5)
 	PORTC = 0xFF; //set pull up resisters to port C, also with hardware
@@ -56,7 +65,7 @@ void setup() {
 	DDRD &= ~(1 << 4); //set PIN4 as input function SHORT (kortsluiting)
 
 	if (bitRead(PINC, 1) == false) {
-		Serial.println("factory");
+		//Serial.println("factory");
 		EEPROM_clear();  //optional clear the eeprom memory, both buttons pressed no loc in station
 	}
 	stoptijd = 0xFFFFFFFF; //max tijd	
@@ -80,7 +89,7 @@ void EEPROM_clear() {
 	for (int i = 0; i < EEPROM.length(); i++) {
 		EEPROM.write(i, 0xFF);
 	}
-	Serial.println("EEprom memory set to 0xFF");
+	//Serial.println("EEprom memory set to 0xFF");
 }
 void PWM_clk() {
 	if (millis() - PWM_time > PWM_cycle) {
@@ -99,7 +108,7 @@ void PWM_clk() {
 	}
 }
 void SHORT() {
-	Serial.println("Stop kortsluiting");
+	//Serial.println("Stop kortsluiting");
 	stoploc;
 	COM_reg &= ~(1 << 4);
 	LED_mode = 5;
@@ -136,13 +145,14 @@ void INIT_engine() {
 	pls = PWM_puls / 4;
 	PWM_max = PWM_puls + (pls*cnt);
 
-
-	Serial.print("PWM_puls= ");
-	Serial.println(PWM_puls);
-	Serial.print("PWM_min= ");
-	Serial.println(PWM_min);
-	Serial.print("PWM_max= ");
-	Serial.println(PWM_max);
+	/*
+		Serial.print("PWM_puls= ");
+		Serial.println(PWM_puls);
+		Serial.print("PWM_min= ");
+		Serial.println(PWM_min);
+		Serial.print("PWM_max= ");
+		Serial.println(PWM_max);
+	*/
 }
 
 void INIT_exe() {
@@ -154,6 +164,7 @@ void INIT_exe() {
 		oldstation = 20;
 		LED_mode = 2;
 		station = INIT_station();
+		COM_reg |= (1 << 4);
 
 		if (bitRead(MEM_reg, 4) == true) {
 			COM_reg |= (1 << 3);
@@ -194,7 +205,7 @@ void INIT_exe() {
 		if (station == 7) { //loc has moved			
 			//stoploc();	
 			INIT_count = 0;
-			Serial.println(" langzaam werkt");
+			//Serial.println(" langzaam werkt");
 			//loc keren terug naar station niet nodig denderen van contact maakt richting toch onduidelijk hier			
 
 			RUN_dir(true); //direction
@@ -212,7 +223,7 @@ void INIT_exe() {
 
 			if (INIT_count > 50) { //period 1 second
 				//stoploc();				
-				Serial.println("FOUT loc beweegt niet....");
+				//Serial.println("FOUT loc beweegt niet....");
 				//verleng aanstuurpuls
 				PWM_px++;
 				INIT_engine();
@@ -229,7 +240,7 @@ void INIT_exe() {
 		//}
 		break;
 	case 4:
-		Serial.println("hier kijken of er gekeerd moet worden....");
+		//Serial.println("hier kijken of er gekeerd moet worden....");
 		RUN_dir(false);
 		if (STATION_adres[0] == 3) {
 			newstation = 5;
@@ -250,10 +261,12 @@ void INIT_exe() {
 	case 10:
 		RUN_route();
 		for (byte i = 0; i < 4; i++) {
+			/*
 			Serial.print("Route ");
 			Serial.print(i);
 			Serial.print(", Tijd= ");
 			Serial.println(routetijd[i]);
+			*/
 		}
 		INIT_fase = 0; //start pendel
 		RUN_dir(false);
@@ -270,11 +283,11 @@ void INIT_exe() {
 			RUN_count[0] = 0;
 			station = INIT_station();
 			//stoploc();
-			Serial.println(station);
+			//Serial.println(station);
 			COM_reg &= ~(1 << 7);
 
 			if (station == 7) {
-				Serial.println("loc nu vrije baan");
+				//Serial.println("loc nu vrije baan");
 				RUN_dir(true);
 				RUN_dl();
 				//startloc();
@@ -292,7 +305,7 @@ void INIT_exe() {
 				}
 				RUN_dir(true);
 				RUN_dl();
-				Serial.println("station was niet vrij!!!");
+				//Serial.println("station was niet vrij!!!");
 				INIT_fase = 1;
 			}
 		}
@@ -354,8 +367,8 @@ void RUN_route() {
 		break;
 	default: // 1 station niet keren
 
-		Serial.print("richting= ");
-		Serial.println(bitRead(COM_reg, 3));
+		//Serial.print("richting= ");
+		//Serial.println(bitRead(COM_reg, 3));
 		if (station == 5) { //driven from 3 to 5
 
 			if (bitRead(COM_reg, 3) == false) {
@@ -442,17 +455,20 @@ void RUN_start() {
 			break;
 		default:
 			//nu gaat het fout, opnieuw initialiseren????
-			Serial.println("gaat fout geen goed begin station");
+			//Serial.println("gaat fout geen goed begin station");
 			break;
 		}
+		/*
+
 		Serial.print("route= ");
 		Serial.print(temp);
 		Serial.print(",  Stoptijd: ");
 		Serial.println(stoptijd);
+*/
 	}
 	else {
 		RUN_meting = millis();
-		Serial.println("start meting");
+		//Serial.println("start meting");
 	}
 }
 void LED_blink() {  //called every 20ms from SW_read
@@ -655,7 +671,7 @@ void LED_blink() {  //called every 20ms from SW_read
 				LED_control(13);
 			}
 		}
-		if(LED_count[0] > 20) {
+		if (LED_count[0] > 20) {
 			LED_mode = 0;
 			LED_count[0] = 0;
 			LED_control(0);
@@ -668,6 +684,16 @@ void LED_blink() {  //called every 20ms from SW_read
 			LED_count[0] = 0;
 		}
 		break;
+	case 16: //confirm programming eeprom
+		LED_count[0]++;
+		if (LED_count[0] == 15)LED_control(10);
+		if (LED_count[0] > 40) {
+			LED_count[0] == 0;
+			LED_mode = 0;
+			LED_control(0);
+		}
+		break;
+
 	}
 }
 void LED_blinkx(byte cnt) {
@@ -690,7 +716,7 @@ void LED_blinkx(byte cnt) {
 			LED_count[2] = LED_count[1] + 20;
 			LED_count[3]++;
 			if (LED_count[3] >= cnt) {
-				Serial.println(LED_count[3]);
+				//Serial.println(LED_count[3]);
 				LED_count[3] = 0;
 				LED_count[2] = 200;
 			}
@@ -805,8 +831,8 @@ void RUN_stop() {
 				break;
 			}
 
-			Serial.print("PWM cycle= ");
-			Serial.println(PWM_cycle);
+			//Serial.print("PWM cycle= ");
+			//Serial.println(PWM_cycle);
 
 
 			if (bitRead(INIT_reg, 1) == true) {
@@ -827,11 +853,12 @@ void RUN_stop() {
 					routetijd[route] = routetijd[route] - 100;
 				}
 			}
-
+			/*
+			
 			Serial.print("aangepaste route= ");
 			Serial.println(route);
 			Serial.println("");
-
+*/
 
 			RUN_dir(false); //richting instellen
 			LED_control(0);
@@ -860,8 +887,8 @@ void RUN_stop() {
 			}
 
 
-			Serial.print("Wachttijd= ");
-			Serial.println(wachttijd);
+			//Serial.print("Wachttijd= ");
+			//Serial.println(wachttijd);
 
 			RUN_wachttijd = millis();
 			COM_reg &= ~(1 << 6);  //stop vertragen.
@@ -872,7 +899,7 @@ void RUN_stop() {
 				INIT_exe();
 			}
 			else {
-				Serial.println("ongelijke melders");
+				//Serial.println("ongelijke melders");
 				switch (station) {
 				case 3:
 					if (bitRead(MEM_reg, 0) == true) {
@@ -880,7 +907,7 @@ void RUN_stop() {
 						INIT_exe();
 					}
 					else {
-						Serial.println("stil blijven staan");
+						//Serial.println("stil blijven staan");
 						startloc();
 						newstation = 10;
 					}
@@ -890,7 +917,7 @@ void RUN_stop() {
 						INIT_exe();
 					}
 					else {
-						Serial.println("hier straks doorrijden");
+						//Serial.println("hier straks doorrijden");
 						startloc();
 						newstation = 10;
 					}
@@ -921,10 +948,7 @@ void SW_read() { // called fromm loop every 20ms
 	byte instel;
 	swnew = PINC;
 	changed = swnew ^ SW_old;
-
-
 	if (changed > 0) {
-
 		//check if both buttons pressed
 		instel = swnew << 6;
 		if (instel == 0) {
@@ -949,8 +973,8 @@ void SW_read() { // called fromm loop every 20ms
 						case 4: //set stoptijd
 							TIJDmeting();
 							tijd = tijd / 1000; //millisec to sec
-							Serial.print("stop tijd in station =");
-							Serial.println(tijd);
+							//Serial.print("stop tijd in station =");
+							//Serial.println(tijd);
 							INIT_reg &= ~(1 << 2); //stops fast flashing green led
 
 							switch (i) {
@@ -1015,16 +1039,16 @@ void SW_read() { // called fromm loop every 20ms
 						case 1: //Knop S
 							switch (PRG_fase) {
 							case 0:
-								COM_reg ^= (1 << 4); //manual stop
-								INIT_fase = 0;
-								LED_mode = 0;
-								LED_control(0);							
-								
-								if (bitRead(COM_reg, 4) == false) { //all stop
+								INIT_reg ^= (1 << 5);
+								//COM_reg ^= (1 << 4); //manual stop
+								if (bitRead(INIT_reg, 5) == false) { //all stop
+									//Serial.println("stop nu geheel...?");
 									stoploc();
 									LED_control(0); //kill leds
+									LED_mode = 0;
 								}
-								else { //Start manual									
+								else { //Start manual	
+									INIT_fase = 0;
 									INIT_exe();
 								}
 								break;
@@ -1148,7 +1172,7 @@ void TIJDmeting() {
 	tijd = millis() - RUN_meting;
 }
 void SW_both() {
-	Serial.println("beide knoppen, begin instellingen");
+	//Serial.println("beide knoppen, begin instellingen");
 	stoploc();
 	INIT_fase = 0;
 	LED_mode = 0;
@@ -1171,6 +1195,7 @@ void MEM_changed() {
 	if (EEPROM.read(30) != MEM_puls) EEPROM.write(30, MEM_puls);
 	if (EEPROM.read(31) != MEM_min) EEPROM.write(31, MEM_min);
 	if (EEPROM.read(32) != MEM_max) EEPROM.write(32, MEM_max);
+	LED_mode = 16;
 }
 
 void loop() {
