@@ -77,9 +77,9 @@ void setup() {
 	if (EEPROM.read(30) == 0xFF)EEPROM.write(30, 3); //puls breedte in ms
 	MEM_puls = EEPROM.read(30);
 	if (EEPROM.read(31) == 0xFF)EEPROM.write(31, 3);
-	MEM_min = EEPROM.read(32);
+	MEM_min = EEPROM.read(31);
 	if (EEPROM.read(32) == 0xFF)EEPROM.write(32, 3);
-	MEM_max = EEPROM.read(31);
+	MEM_max = EEPROM.read(32);
 	PWM_px = 0;
 	INIT_engine();
 }
@@ -868,7 +868,7 @@ void RUN_stop() {
 			case 3:
 				LED_mode = 8;
 				if (bitRead(MEM_reg, 2) == true) {
-					wachttijd = random(1000, 45000);
+					wachttijd = random(1000, 60000);
 				}
 				else {
 					wachttijd = STATION_tijd[0] * 1000;
@@ -939,7 +939,7 @@ void SW_read() { // called fromm loop every 20ms
 		if (MINtime > 70) { //loc runs min speed for 1,5 second
 			INIT_reg |= (1 << 1);
 			INIT_reg &= ~(1 << 0);
-			PWM_cycle = PWM_min - (1.5*PWM_puls);
+			PWM_cycle = PWM_min - (1.8*PWM_puls);
 		}
 	}
 	LED_blink();
