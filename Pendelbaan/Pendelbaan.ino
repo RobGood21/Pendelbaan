@@ -38,7 +38,7 @@ byte route;
 byte STATION_adres[2];
 boolean STATION_dir[2];
 byte STATION_tijd[2]; //tijd dat trein stilstaat in station in seconden max 255 0=melder 1 adres 3 1=melder 2adres 5
-byte MEM_reg; //bit 0=station 3 bit 1=station 5
+byte MEM_reg; //bit 0=station 3 bit 1=station 5  
 byte MEM_puls; //30
 byte MEM_max; //31
 byte MEM_min; //32
